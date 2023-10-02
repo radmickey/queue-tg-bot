@@ -6,13 +6,14 @@ import user_queue
 import pickle
 from chkmsg import *
 from load_env import API_TOKEN, GOOGLE_TOKEN
-from config import BOT_CREATOR, CAN_CREATE_QUEUES, CHAT_IDS, DEFAULT_QUEUE_SIZE, MAX_QUEUE_NAME_LENGTH, URLS, MAX_QUEUE_SIZE
+from config import BOT_CREATOR, CAN_CREATE_QUEUES, CHAT_IDS, DEFAULT_QUEUE_SIZE, MAX_QUEUE_NAME_LENGTH, URLS, \
+    MAX_QUEUE_SIZE
 
 with open("queues.txt", "rb") as f:
     queues = pickle.load(f)
 
 queues: dict[int, dict[str, user_queue.Queue]] = queues
-
+# queues: dict[int, dict[str, user_queue.Queue]] = {}
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 
@@ -27,7 +28,7 @@ async def my_id(message: types.Message):
     await message.answer(ans, parse_mode="MarkdownV2")
 
 
-@dp.message_handler(commands=["createq", "createqueue", "startq", "startqueue"])
+@dp.message_handler(commands=["createq", "createqueue", "startq", "startqueue", "cq"])
 async def create_queue(message: types.Message):
     if message.from_user.id not in CAN_CREATE_QUEUES:
         await message.answer("Ты не можешь создать очередь")
@@ -37,6 +38,9 @@ async def create_queue(message: types.Message):
         return
     try:
         size = min(int(message.text.split()[1]), MAX_QUEUE_SIZE)
+        if size <= 0:
+            await message.answer("Размер очереди должен быть положительным")
+            return
         _, qname = message.text.split(maxsplit=2)[1:]
     except ValueError:
         qname = message.text.split(maxsplit=1)[1]
@@ -67,7 +71,7 @@ async def create_queue(message: types.Message):
         reply_markup=queues[message.chat.id][qname].get_keyboard())
 
 
-@dp.message_handler(commands=["getqueue"])
+# @dp.message_handler(commands=["getqueue"])
 async def get_queue_from_google(message: types.Message):
     if message.from_user.id not in CAN_CREATE_QUEUES:
         await message.answer("Ты не можешь создать очередь")
@@ -86,13 +90,13 @@ async def get_queue_from_google(message: types.Message):
     await message.answer(text=msg)
 
 
-@dp.message_handler(commands=["delaystartq"])
+@dp.message_handler(commands=["delaystartq", "dcq", "dsq", "cqd"])
 async def delay_create_queue(message: types.Message):
     if message.from_user.id not in CAN_CREATE_QUEUES:
         await message.answer("Ты не можешь создать очередь")
         return
     if len(message.text.split()) < 2:
-        await message.answer("Usage: /delaystartq t=<await time> <delay, default=10> <qname>")
+        await message.answer("Usage: /delaystartq t=<await time> <size, default=25> <qname>")
         return
     time = 10
     if message.text.split()[1].startswith('t='):
@@ -121,7 +125,7 @@ async def delay_create_queue(message: types.Message):
 @dp.message_handler(commands=["listq"])
 async def queue_list(message: types.Message):
     if message.from_user.id != BOT_CREATOR:
-        await message.answer("Only for Hu Tao")
+        await message.answer("Only for Admin")
         return
 
     msg = "Очереди:\n"
@@ -137,7 +141,7 @@ async def queue_list(message: types.Message):
 @dp.message_handler(commands=["delete"])
 async def delete(message: types.Message):
     if message.from_user.id != BOT_CREATOR:
-        await message.answer("Only for Hu Tao")
+        await message.answer("Only for Admin")
         return
 
     for i in list(queues[message.chat.id].keys()):
@@ -148,7 +152,7 @@ async def delete(message: types.Message):
 @dp.message_handler(commands=["deleteall"])
 async def delete_all(message: types.Message):
     if message.from_user.id != BOT_CREATOR:
-        await message.answer("Only for Hu Tao")
+        await message.answer("Only for Admin")
         return
 
     for i in list(queues.keys()):
@@ -165,7 +169,7 @@ async def me(message: types.Message):
     try:
         user = message.text.split(maxsplit=1)[1]
     except IndexError:
-        user = 'Ягодин Захар Сергеевич'
+        user = 'Радионов Михаил Леонидович'
 
     async def get_data(user: str, table: str, tab: str, start: str, end: str, ):
         async def generate_url():
@@ -173,23 +177,28 @@ async def me(message: types.Message):
                            f"{table}/values/" \
                            f"{tab}!{start}:{end}?" \
                            f"key={GOOGLE_TOKEN}"
+            print(URL_TEMPLATE)
             async with ClientSession() as session:
                 async with session.get(URL_TEMPLATE) as response:
                     return (await response.json()).get("values")
 
         values = await generate_url()
         values = values[0], [i for i in values[1:] if user in i][0]
+        # print(values)
         values = list(map(list, zip(*values)))
+        # print(values)
         values = [[i, j] for (i, j) in values if i in [
             "Итого", "Итог фулл", 'Total', 'Mid term score']]
+        # print(values)
         return values[0][1]
 
     tables = {
-        "programming": ["1RDy1Fs8YmFQ7siXtub1wGKU5nnHTwHn6soBA4FvtPno", "Баллы", "A3", "Q"],
-        "algorithms": ["1UlkxAJ_PHAWjLDrZQYVE5Z_xjdaj1_9l1QnAmjyMdEI", "семестр 1", "A", "U"],
-        "discrete": ["1b202IiOF_Q11qLv8iVbJHKckKOaE1tPnNrSCmUYpjW4", "Scores", "A3", "P"],
-        "english (p1)": ["1NMf94E2Gv7gCe5bc5-BIj2afmoh2uqlMeqKnnZKE2G0", "Fall semester (weeks1-8)", "A2", "AE"],
-        "english (p2)": ["1NMf94E2Gv7gCe5bc5-BIj2afmoh2uqlMeqKnnZKE2G0", "Fall semester (weeks9-16)", "A2", "AG"],
+        # "programming": ["1RDy1Fs8YmFQ7siXtub1wGKU5nnHTwHn6soBA4FvtPno", "Баллы", "A3", "Q"],
+         "algorithms": ["1S551IzCnOW4WOw_NYYff-udsigAjfkbBGwAyffAm25E", "семестр 1", "A", "U"],
+         "discrete": ["1XZhP_XYiKjYnAmALyJmmTq-RuSf3pq8AHOA20yhfdXg", "Scores", "A3", "P"],
+        # "english (p1)": ["1NMf94E2Gv7gCe5bc5-BIj2afmoh2uqlMeqKnnZKE2G0", "Fall semester (weeks1-8)", "A2", "AE"],
+        # "english (p2)": ["1NMf94E2Gv7gCe5bc5-BIj2afmoh2uqlMeqKnnZKE2G0", "Fall semester (weeks9-16)", "A2", "AG"],
+        "DevTools" : ["1jc9GBNwBLTAz7sv5hk53CL9PumSKew4u0O5RUtlQ21A", "M3100", "B1", "V"]
     }
 
     msg = f"{user}\n"
@@ -206,12 +215,19 @@ async def me(message: types.Message):
 @dp.message_handler(commands=["shutdown", "exit"])
 async def shutdown(message: types.Message):
     if message.from_user.id != BOT_CREATOR:
-        await message.answer("Only for Hu Tao")
+        await message.answer("Only for Admin")
         return
 
     dp.stop_polling()
     pickle.dump(queues, open("queues.txt", "wb"))
-    exit()
+    # await exit()
+
+@dp.message_handler(commands=["test"])
+async def test(message: types.Message):
+    if (message.from_user.username != "radmickey"):
+        return
+    for i in range(30):
+        await message.answer(f"/chatgpt я живой? {i}")
 
 
 @dp.callback_query_handler(lambda c: c.data and c.data.startswith('key'))
@@ -240,10 +256,11 @@ async def delete_queue(callback_query: types.CallbackQuery):
                                     text=f"{qname} (stopped)")
         return
 
-    if callback_query.from_user.id != queues[callback_query.message.chat.id][qname].creator and callback_query.from_user.id != BOT_CREATOR:
+    if callback_query.from_user.id != queues[callback_query.message.chat.id][
+        qname].creator and callback_query.from_user.id != BOT_CREATOR:
         await bot.answer_callback_query(callback_query.id, text="Это может сделать только создатель очереди")
         return
-
+    # print(1)
     await bot.edit_message_text(message_id=callback_query.message.message_id, chat_id=callback_query.message.chat.id,
                                 text=f"{qname} (stopped):\n{queues[callback_query.message.chat.id][qname].get_print(full=False)}")
     del queues[callback_query.message.chat.id][qname]
@@ -252,7 +269,8 @@ async def delete_queue(callback_query: types.CallbackQuery):
 @dp.callback_query_handler(lambda c: c.data and c.data.startswith('reset'))
 async def reset_queue(callback_query: types.CallbackQuery):
     _, qname = callback_query.data.split("/")
-    if callback_query.from_user.id != queues[callback_query.message.chat.id][qname].creator and callback_query.from_user.id != BOT_CREATOR:
+    if callback_query.from_user.id != queues[callback_query.message.chat.id][
+        qname].creator and callback_query.from_user.id != BOT_CREATOR:
         await bot.answer_callback_query(callback_query.id, text="Это может сделать только создатель очереди")
         return
 

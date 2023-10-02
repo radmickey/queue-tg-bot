@@ -37,6 +37,7 @@ class Queue:
 
     def get_print(self, full=True):
         text = ""
+        # print(2)
         for num, value in enumerate(self.users, 1):
             if value.user_id != 0 or full:
                 text += f"{num}) {value.name}\n"
